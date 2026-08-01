@@ -3,106 +3,430 @@
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>Peta Fasilitas Pendidikan — Kota Jambi</title>
+    <title>Dashboard Peta Fasilitas Pendidikan — Kota Jambi</title>
     
-    <!-- Leaflet CSS (atau CSS Peta lainnya) -->
+    <!-- Google Fonts & Font Awesome Icons -->
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    
+    <!-- Leaflet CSS -->
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
-    
+
     <style>
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+            font-family: 'Inter', sans-serif;
+        }
+
+        body {
+            background-color: #f4f6f9;
+            color: #333;
+            display: flex;
+            flex-direction: column;
+            min-height: 100vh;
+        }
+
+        /* Header */
+        header {
+            background: linear-gradient(135deg, #1e3c72 0%, #2a5298 100%);
+            color: #fff;
+            padding: 20px 30px;
+            box-shadow: 0 4px 10px rgba(0, 0, 0, 0.1);
+        }
+
+        header h1 {
+            font-size: 1.5rem;
+            font-weight: 700;
+        }
+
+        header p {
+            font-size: 0.875rem;
+            opacity: 0.85;
+            margin-top: 4px;
+        }
+
+        /* Container Layout */
+        .container {
+            display: flex;
+            flex-wrap: wrap;
+            padding: 20px;
+            gap: 20px;
+            flex: 1;
+        }
+
+        /* Sidebar & Legend */
+        .sidebar {
+            flex: 1;
+            min-width: 280px;
+            max-width: 360px;
+            display: flex;
+            flex-direction: column;
+            gap: 20px;
+        }
+
+        .card {
+            background: #fff;
+            border-radius: 12px;
+            padding: 20px;
+            box-shadow: 0 2px 12px rgba(0,0,0,0.06);
+        }
+
+        .card h3 {
+            font-size: 1rem;
+            margin-bottom: 15px;
+            color: #1e3c72;
+            border-bottom: 2px solid #eef2f5;
+            padding-bottom: 8px;
+        }
+
+        /* Stat Pills */
+        .stat-grid {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 10px;
+        }
+
+        .stat-item {
+            background: #f8fafc;
+            border: 1px solid #e2e8f0;
+            border-radius: 8px;
+            padding: 12px;
+            text-align: center;
+        }
+
+        .stat-item .num {
+            font-size: 1.4rem;
+            font-weight: 700;
+            color: #2a5298;
+        }
+
+        .stat-item .label {
+            font-size: 0.75rem;
+            color: #64748b;
+        }
+
+        /* Custom Legend List */
+        .legend-list {
+            list-style: none;
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+            max-height: 350px;
+            overflow-y: auto;
+        }
+
+        .legend-item {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            font-size: 0.85rem;
+            padding: 6px 8px;
+            border-radius: 6px;
+            transition: background 0.2s;
+        }
+
+        .legend-item:hover {
+            background: #f1f5f9;
+        }
+
+        .legend-badge {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .color-circle {
+            width: 14px;
+            height: 14px;
+            border-radius: 50%;
+            display: inline-block;
+            box-shadow: 0 0 0 2px rgba(0,0,0,0.05);
+        }
+
+        /* Map Container */
+        .map-wrapper {
+            flex: 3;
+            min-width: 320px;
+            position: relative;
+            background: #fff;
+            border-radius: 12px;
+            overflow: hidden;
+            box-shadow: 0 2px 12px rgba(0,0,0,0.06);
+            min-height: 550px;
+        }
+
         #map {
             width: 100%;
-            height: 600px;
-            border-radius: 8px;
+            height: 100%;
+            min-height: 550px;
         }
-        .loading {
-            text-align: center;
-            padding: 20px;
-            font-family: sans-serif;
+
+        #loading {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            z-index: 1000;
+            background: rgba(255, 255, 255, 0.95);
+            padding: 20px 30px;
+            border-radius: 8px;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.15);
+            font-weight: 600;
+            color: #1e3c72;
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+
+        /* Popup Styling */
+        .leaflet-popup-content-wrapper {
+            border-radius: 8px;
+            padding: 5px;
+        }
+
+        .popup-table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 0.8rem;
+            margin-top: 8px;
+        }
+
+        .popup-table th, .popup-table td {
+            padding: 5px 8px;
+            border-bottom: 1px solid #e2e8f0;
+            text-align: left;
+        }
+
+        .popup-table th {
+            background: #f8fafc;
+            color: #475569;
+            font-weight: 600;
+        }
+
+        .popup-title {
+            font-size: 0.95rem;
+            font-weight: 700;
+            color: #1e3c72;
+            border-bottom: 2px solid #2a5298;
+            padding-bottom: 4px;
         }
     </style>
 </head>
 <body>
 
-    <h2>Peta Fasilitas Pendidikan Kota Jambi</h2>
-    <div id="loading" class="loading">Memuat data dari GitHub...</div>
-    <div id="map" style="display:none;"></div>
+    <header>
+        <h1><i class="fa-solid fa-map-location-dot"></i> Peta Fasilitas Pendidikan — Kota Jambi</h1>
+        <p>Sistem Informasi Geografis berbasis data terbuka GitHub (GeoJSON Dinamis)</p>
+    </header>
+
+    <div class="container">
+        <!-- Sidebar Kiri -->
+        <div class="sidebar">
+            <!-- Card Ringkasan Data -->
+            <div class="card">
+                <h3><i class="fa-solid fa-chart-pie"></i> Ringkasan Data</h3>
+                <div class="stat-grid">
+                    <div class="stat-item">
+                        <div class="num" id="stat-total">0</div>
+                        <div class="label">Total Fasilitas</div>
+                    </div>
+                    <div class="stat-item">
+                        <div class="num" id="stat-categories">0</div>
+                        <div class="label">Kategori</div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Card Legenda Warna -->
+            <div class="card">
+                <h3><i class="fa-solid fa-layer-group"></i> Legenda Kategori</h3>
+                <ul class="legend-list" id="legend-list">
+                    <li style="color: #888; font-size: 0.85rem;">Memuat legenda...</li>
+                </ul>
+            </div>
+        </div>
+
+        <!-- Peta Utama -->
+        <div class="map-wrapper">
+            <div id="loading">
+                <i class="fa-solid fa-spinner fa-spin fa-lg"></i> Memuat Data GeoJSON dari GitHub...
+            </div>
+            <div id="map"></div>
+        </div>
+    </div>
 
     <!-- Leaflet JS -->
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 
     <script>
-        // URL Raw GitHub untuk file GeoJSON kamu
+        // URL Raw Github
         const URL_KOTA = 'https://raw.githubusercontent.com/MuhammadTaufikkurrahman/MAP_TOPIK/main/kota.geojson';
         const URL_BOUNDARY = 'https://raw.githubusercontent.com/MuhammadTaufikkurrahman/MAP_TOPIK/main/clipping_boundary.geojson';
 
+        // Palet warna untuk kategori ikon secara otomatis
+        const COLOR_PALETTE = [
+            '#e74c3c', '#3498db', '#2ecc71', '#f1c40f', '#9b59b6', 
+            '#e67e22', '#1abc9c', '#34495e', '#d35400', '#8e44ad',
+            '#27ae60', '#16a085', '#2980b9', '#f39c12', '#c0392b'
+        ];
+
+        // Map untuk menyimpan pasangan "Kategori -> Warna"
+        const categoryColors = {};
+        const categoryCounts = {};
+
+        // Fungsi membuat Ikon Berwarna untuk Leaflet
+        function createCustomIcon(color) {
+            const svgIcon = `
+                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="${color}" width="30px" height="30px" style="filter: drop-shadow(0px 2px 4px rgba(0,0,0,0.3));">
+                    <path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5c-1.38 0-2.5-1.12-2.5-2.5s1.12-2.5 2.5-2.5 2.5 1.12 2.5 2.5-1.12 2.5-2.5 2.5z"/>
+                </svg>`;
+            
+            return L.divIcon({
+                html: svgIcon,
+                className: '',
+                iconSize: [30, 30],
+                iconAnchor: [15, 30],
+                popupAnchor: [0, -28]
+            });
+        }
+
         async function loadData() {
             try {
-                // Fetch data GeoJSON dari GitHub secara paralel
                 const [facilitiesData, boundaryData] = await Promise.all([
                     fetch(URL_KOTA).then(res => {
-                        if (!res.ok) throw new Error('Gagal memuat data kota');
+                        if (!res.ok) throw new Error('Gagal mengambil data kota.geojson');
                         return res.json();
                     }),
                     fetch(URL_BOUNDARY).then(res => {
-                        if (!res.ok) throw new Error('Gagal memuat data boundary');
+                        if (!res.ok) throw new Error('Gagal mengambil data clipping_boundary.geojson');
                         return res.json();
-                    })
+                    }).catch(() => null) // Boundary opsional jika tidak ada
                 ]);
 
-                // Sembunyikan pesan loading dan tampilkan peta
                 document.getElementById('loading').style.display = 'none';
-                document.getElementById('map').style.display = 'block';
-
-                // Inisialisasi peta setelah data selesai di-fetch
                 initMap(facilitiesData, boundaryData);
 
             } catch (error) {
-                console.error('Error saat mengambil data GeoJSON:', error);
-                document.getElementById('loading').innerText = 'Gagal memuat data dari GitHub. Periksa kembali file/repository.';
+                console.error(error);
+                document.getElementById('loading').innerHTML = `
+                    <span style="color: #e74c3c;">
+                        <i class="fa-solid fa-triangle-exclamation"></i> Gagal memuat data dari GitHub.
+                    </span>`;
             }
         }
 
         function initMap(facilities, boundary) {
-            // 1. Inisialisasi Peta (Koordinat Pusat Kota Jambi)
+            // 1. Inisialisasi Peta
             const map = L.map('map').setView([-1.610123, 103.613120], 12);
 
-            // 2. Tambahkan Tile Layer (Basemap)
-            L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-                attribution: '&copy; OpenStreetMap contributors'
+            // Basemap Modern (CartoDB Positron)
+            L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png', {
+                attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors &copy; <a href="https://carto.com/attributions">CARTO</a>',
+                subdomains: 'abcd',
+                maxZoom: 19
             }).addTo(map);
 
-            // 3. Tambahkan Layer Clipping Boundary dari GitHub
+            // 2. Render Boundary jika ada
             if (boundary) {
                 L.geoJSON(boundary, {
                     style: {
-                        color: '#ff7800',
+                        color: '#2a5298',
                         weight: 2,
-                        opacity: 0.65
+                        dashArray: '5, 5',
+                        fillColor: '#2a5298',
+                        fillOpacity: 0.05
                     }
                 }).addTo(map);
             }
 
-            // 4. Tambahkan Layer Fasilitas Kota dari GitHub
-            if (facilities) {
+            // 3. Identifikasi Kategori & Alokasikan Warna
+            let colorIndex = 0;
+            let totalFeatures = 0;
+
+            if (facilities && facilities.features) {
+                totalFeatures = facilities.features.length;
+
+                facilities.features.forEach(feature => {
+                    const props = feature.properties || {};
+                    // Mencari key nama kategori (misal: "REMARK", "NAMOBJ", "JENIS", "KATEGORI", dll)
+                    const category = props.REMARK || props.JENIS || props.KATEGORI || props.jenis || 'Lainnya';
+                    
+                    if (!categoryColors[category]) {
+                        categoryColors[category] = COLOR_PALETTE[colorIndex % COLOR_PALETTE.length];
+                        colorIndex++;
+                        categoryCounts[category] = 0;
+                    }
+                    categoryCounts[category]++;
+                });
+
+                // 4. Tambahkan Layer Fasilitas ke Peta
                 const facilitiesLayer = L.geoJSON(facilities, {
+                    pointToLayer: function (feature, latlng) {
+                        const props = feature.properties || {};
+                        const category = props.REMARK || props.JENIS || props.KATEGORI || props.jenis || 'Lainnya';
+                        const color = categoryColors[category];
+                        
+                        return L.marker(latlng, { icon: createCustomIcon(color) });
+                    },
                     onEachFeature: function (feature, layer) {
-                        // Tampilkan popup jika ada properti nama
-                        if (feature.properties) {
-                            let popupContent = '<b>Fasilitas Pendidikan</b><br>';
-                            for (let key in feature.properties) {
-                                popupContent += `<b>${key}:</b> ${feature.properties[key]}<br>`;
-                            }
-                            layer.bindPopup(popupContent);
+                        // Buat Tabel Popup Dinamis Menampilkan SEMUA Data
+                        const props = feature.properties || {};
+                        let title = props.NAMOBJ || props.NAMA || props.nama || 'Fasilitas Pendidikan';
+                        
+                        let tableRows = '';
+                        for (let key in props) {
+                            tableRows += `
+                                <tr>
+                                    <th>${key}</th>
+                                    <td>${props[key] !== null ? props[key] : '-'}</td>
+                                </tr>`;
                         }
+
+                        const popupContent = `
+                            <div class="popup-title">${title}</div>
+                            <table class="popup-table">
+                                ${tableRows}
+                            </table>
+                        `;
+                        layer.bindPopup(popupContent);
                     }
                 }).addTo(map);
 
-                // Sesuaikan zoom peta ke area data
-                map.fitBounds(facilitiesLayer.getBounds());
+                // Zoom otomatis pas ke area data
+                if (facilitiesLayer.getBounds().isValid()) {
+                    map.fitBounds(facilitiesLayer.getBounds(), { padding: [30, 30] });
+                }
+            }
+
+            // 5. Update UI Statistik & Legenda
+            updateDashboardUI(totalFeatures);
+        }
+
+        function updateDashboardUI(totalCount) {
+            document.getElementById('stat-total').innerText = totalCount;
+            document.getElementById('stat-categories').innerText = Object.keys(categoryColors).length;
+
+            const legendList = document.getElementById('legend-list');
+            legendList.innerHTML = '';
+
+            for (const [cat, color] of Object.entries(categoryColors)) {
+                const count = categoryCounts[cat];
+                const li = document.createElement('li');
+                li.className = 'legend-item';
+                li.innerHTML = `
+                    <div class="legend-badge">
+                        <span class="color-circle" style="background-color: ${color};"></span>
+                        <span>${cat}</span>
+                    </div>
+                    <strong>${count}</strong>
+                `;
+                legendList.appendChild(li);
             }
         }
 
-        // Jalankan fungsi loadData saat halaman dibuka
+        // Jalankan
         loadData();
     </script>
 </body>
