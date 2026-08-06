@@ -554,6 +554,22 @@
             updateDashboardUI(totalFeatures);
             applyFilters();
 
+            // Fitur rute diinisialisasi terpisah & dibungkus try-catch, supaya jika
+            // library routing gagal dimuat/berjalan, peta & data fasilitas TETAP tampil normal.
+            try {
+                initRoutingFeature();
+            } catch (routeErr) {
+                console.error('Fitur rute gagal diinisialisasi (peta & data tetap berjalan normal):', routeErr);
+            }
+        }
+
+        function initRoutingFeature() {
+            if (typeof L.Routing === 'undefined') {
+                console.warn('Leaflet Routing Machine tidak termuat — fitur rute dinonaktifkan, peta tetap berfungsi.');
+                document.getElementById('btn-pick-location').disabled = true;
+                document.getElementById('btn-my-location').disabled = true;
+                return;
+            }
             // Klik di peta untuk menandai lokasi pengguna (hanya aktif saat mode pilih lokasi menyala)
             map.on('click', onMapClick);
         }
@@ -667,16 +683,27 @@
                 map.removeControl(routingControl);
                 routingControl = null;
             }
-            routingControl = L.Routing.control({
-                waypoints: [userLatLng, facilityLatLng],
-                routeWhileDragging: false,
-                addWaypoints: false,
-                draggableWaypoints: false,
-                fitSelectedRoutes: true,
-                show: false,
-                lineOptions: { styles: [{ color: '#16a34a', weight: 5, opacity: 0.85 }] },
-                createMarker: function () { return null; } // marker sudah kita buat sendiri
-            }).addTo(map);
+            try {
+                routingControl = L.Routing.control({
+                    waypoints: [userLatLng, facilityLatLng],
+                    routeWhileDragging: false,
+                    addWaypoints: false,
+                    draggableWaypoints: false,
+                    fitSelectedRoutes: true,
+                    show: false,
+                    lineOptions: { styles: [{ color: '#16a34a', weight: 5, opacity: 0.85 }] },
+                    createMarker: function () { return null; } // marker sudah kita buat sendiri
+                });
+                routingControl.on('routingerror', () => {
+                    const note = document.createElement('div');
+                    note.style.cssText = 'color:#e74c3c;font-size:0.72rem;margin-top:6px;';
+                    note.innerText = 'Server rute jalan sedang tidak merespons, hanya jarak lurus yang ditampilkan.';
+                    document.getElementById('route-info').appendChild(note);
+                });
+                routingControl.addTo(map);
+            } catch (err) {
+                console.error('Gagal membuat rute (jarak lurus tetap ditampilkan):', err);
+            }
         }
 
         function handleLocationSelected(latlng) {
