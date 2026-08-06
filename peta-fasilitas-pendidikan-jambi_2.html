@@ -253,9 +253,9 @@
             </div>
 
             <div class="card">
-                <h3><i class="fa-solid fa-route"></i> Rute ke Fasilitas Terdekat</h3>
+                <h3><i class="fa-solid fa-route"></i> Rute ke Fasilitas Pendidikan</h3>
                 <p style="font-size:0.75rem;color:#94a3b8;margin-bottom:10px;">
-                    Tandai lokasi Anda di peta, sistem akan otomatis mencari fasilitas pendidikan aktif terdekat dan menampilkan jalur menuju ke sana.
+                    Tandai lokasi Anda di peta. Secara otomatis sistem menuju fasilitas aktif terdekat — atau pilih sendiri fasilitas tujuannya di daftar bawah.
                 </p>
                 <button id="btn-pick-location" class="route-btn primary">
                     <i class="fa-solid fa-location-crosshairs"></i> Pilih Lokasi di Peta
@@ -263,6 +263,15 @@
                 <button id="btn-my-location" class="route-btn">
                     <i class="fa-solid fa-crosshairs"></i> Gunakan Lokasi GPS Saya
                 </button>
+
+                <label for="facility-select" style="font-size:0.75rem;color:#64748b;display:block;margin:10px 0 4px;">
+                    Pilih tujuan fasilitas tertentu (opsional):
+                </label>
+                <select id="facility-select" disabled
+                    style="width:100%;padding:9px 10px;border:1px solid #e2e8f0;border-radius:8px;font-size:0.82rem;color:#1e293b;background:#f8fafc;margin-bottom:8px;">
+                    <option value="">Tentukan lokasi Anda dahulu…</option>
+                </select>
+
                 <button id="btn-clear-route" class="route-btn danger" style="display:none;">
                     <i class="fa-solid fa-xmark"></i> Hapus Lokasi &amp; Rute
                 </button>
@@ -553,6 +562,7 @@
 
             updateDashboardUI(totalFeatures);
             applyFilters();
+            populateFacilitySelect();
 
             // Fitur rute diinisialisasi terpisah & dibungkus try-catch, supaya jika
             // library routing gagal dimuat/berjalan, peta & data fasilitas TETAP tampil normal.
@@ -646,36 +656,83 @@
         }
 
         // Mencari fasilitas terdekat dari titik tertentu, hanya di antara kategori yang sedang aktif/tampil
+        // Mengembalikan juga index-nya agar bisa disinkronkan ke dropdown pilihan tujuan.
         function findNearestFacility(latlng) {
-            let nearest = null, minDist = Infinity;
-            allMarkersMeta.forEach(m => {
+            let nearestIdx = -1, minDist = Infinity;
+            allMarkersMeta.forEach((m, idx) => {
                 if (!activeCategories.has(m.category)) return;
                 const pos = m.layer.getLatLng();
                 const d = haversineKm(latlng.lat, latlng.lng, pos.lat, pos.lng);
-                if (d < minDist) { minDist = d; nearest = m; }
+                if (d < minDist) { minDist = d; nearestIdx = idx; }
             });
-            return { nearest, minDist };
+            return { idx: nearestIdx, meta: nearestIdx >= 0 ? allMarkersMeta[nearestIdx] : null, minDist };
         }
 
-        function showRouteInfo(nearest, minDist) {
+        function showRouteInfo(meta, dist, { manual } = {}) {
             const info = document.getElementById('route-info');
             info.style.display = 'block';
-            if (!nearest) {
+            if (!meta) {
                 info.innerHTML = `<p style="color:#e74c3c;font-size:0.8rem;">Tidak ada fasilitas aktif di peta. Aktifkan minimal satu kategori pada legenda.</p>`;
                 return;
             }
-            const meta = CATEGORY_META[nearest.category];
+            const catMeta = CATEGORY_META[meta.category];
             info.innerHTML = `
                 <div style="font-size:0.8rem;">
-                    <div style="font-weight:700;color:#1e3c72;margin-bottom:4px;">${escapeHtml(nearest.name)}</div>
-                    <div style="display:flex;align-items:center;gap:6px;margin-bottom:6px;">
-                        <span class="color-circle" style="background-color:${meta.color};width:10px;height:10px;"></span>
-                        <span>${escapeHtml(meta.label)}</span>
+                    <div style="font-size:0.68rem;font-weight:700;color:${manual ? '#2a5298' : '#16a34a'};text-transform:uppercase;letter-spacing:.03em;margin-bottom:4px;">
+                        ${manual ? '<i class="fa-solid fa-hand-pointer"></i> Tujuan pilihan Anda' : '<i class="fa-solid fa-wand-magic-sparkles"></i> Fasilitas terdekat otomatis'}
                     </div>
-                    <div style="color:#64748b;">Jarak lurus: <b>${minDist.toFixed(2)} km</b></div>
+                    <div style="font-weight:700;color:#1e3c72;margin-bottom:4px;">${escapeHtml(meta.name)}</div>
+                    <div style="display:flex;align-items:center;gap:6px;margin-bottom:6px;">
+                        <span class="color-circle" style="background-color:${catMeta.color};width:10px;height:10px;"></span>
+                        <span>${escapeHtml(catMeta.label)}</span>
+                    </div>
+                    <div style="color:#64748b;">Jarak lurus: <b>${dist.toFixed(2)} km</b></div>
                     <div style="color:#94a3b8;font-size:0.72rem;margin-top:6px;">Jalur rute di peta dihitung otomatis mengikuti jalan (via OSRM).</div>
                 </div>
             `;
+        }
+
+        // Mengarahkan rute dari lokasi pengguna ke fasilitas tertentu (dipakai baik oleh
+        // pencarian otomatis maupun pemilihan manual lewat dropdown)
+        function routeToFacility(userLatLng, idx, { manual } = {}) {
+            if (idx === null || idx === undefined || idx < 0) {
+                showRouteInfo(null, 0);
+                if (routingControl) { map.removeControl(routingControl); routingControl = null; }
+                return;
+            }
+            const meta = allMarkersMeta[idx];
+            const facLatLng = meta.layer.getLatLng();
+            const dist = haversineKm(userLatLng.lat, userLatLng.lng, facLatLng.lat, facLatLng.lng);
+
+            showRouteInfo(meta, dist, { manual });
+            drawRouteTo(userLatLng, facLatLng);
+
+            const select = document.getElementById('facility-select');
+            if (select) select.value = String(idx);
+        }
+
+        // Mengisi dropdown daftar fasilitas, dikelompokkan per kategori jenjang
+        function populateFacilitySelect() {
+            const select = document.getElementById('facility-select');
+            if (!select) return;
+            const byCategory = {};
+            allMarkersMeta.forEach((m, idx) => {
+                (byCategory[m.category] = byCategory[m.category] || []).push({ idx, name: m.name });
+            });
+            Object.keys(CATEGORY_META).forEach(catKey => {
+                const items = byCategory[catKey];
+                if (!items || !items.length) return;
+                items.sort((a, b) => a.name.localeCompare(b.name, 'id'));
+                const group = document.createElement('optgroup');
+                group.label = CATEGORY_META[catKey].label;
+                items.forEach(item => {
+                    const opt = document.createElement('option');
+                    opt.value = String(item.idx);
+                    opt.textContent = item.name;
+                    group.appendChild(opt);
+                });
+                select.appendChild(group);
+            });
         }
 
         function drawRouteTo(userLatLng, facilityLatLng) {
@@ -706,24 +763,31 @@
             }
         }
 
-        function handleLocationSelected(latlng) {
+        function handleLocationSelected(latlng, opts = {}) {
             if (userMarker) {
                 userMarker.setLatLng(latlng);
             } else {
                 userMarker = L.marker(latlng, { icon: userIcon, draggable: true }).addTo(map);
                 userMarker.bindPopup('<b>Lokasi Anda</b>');
-                userMarker.on('dragend', () => handleLocationSelected(userMarker.getLatLng()));
+                userMarker.on('dragend', () => handleLocationSelected(userMarker.getLatLng(), { keepSelectedFacility: true }));
             }
             userMarker.openPopup();
 
-            const { nearest, minDist } = findNearestFacility(latlng);
-            showRouteInfo(nearest, minDist);
+            const select = document.getElementById('facility-select');
+            if (select) {
+                select.disabled = false;
+                if (select.options[0] && select.options[0].value === '') {
+                    select.options[0].textContent = '— Pilih fasilitas tujuan —';
+                }
+            }
 
-            if (nearest) {
-                drawRouteTo(latlng, nearest.layer.getLatLng());
-            } else if (routingControl) {
-                map.removeControl(routingControl);
-                routingControl = null;
+            // Jika marker digeser dan sebelumnya sudah ada tujuan manual terpilih, pertahankan tujuan itu.
+            const manualIdx = select && select.value !== '' ? Number(select.value) : null;
+            if (opts.keepSelectedFacility && manualIdx !== null) {
+                routeToFacility(latlng, manualIdx, { manual: true });
+            } else {
+                const { idx } = findNearestFacility(latlng);
+                routeToFacility(latlng, idx, { manual: false });
             }
 
             document.getElementById('btn-clear-route').style.display = 'flex';
@@ -765,11 +829,26 @@
             });
         });
 
+        document.getElementById('facility-select').addEventListener('change', (e) => {
+            const idx = e.target.value;
+            if (!userMarker) {
+                alert('Tentukan lokasi Anda terlebih dahulu (klik "Pilih Lokasi di Peta" atau "Gunakan Lokasi GPS Saya").');
+                e.target.value = '';
+                return;
+            }
+            if (idx === '') return;
+            routeToFacility(userMarker.getLatLng(), Number(idx), { manual: true });
+        });
+
         document.getElementById('btn-clear-route').addEventListener('click', () => {
             if (userMarker) { map.removeLayer(userMarker); userMarker = null; }
             if (routingControl) { map.removeControl(routingControl); routingControl = null; }
             document.getElementById('route-info').style.display = 'none';
             document.getElementById('btn-clear-route').style.display = 'none';
+            const select = document.getElementById('facility-select');
+            select.value = '';
+            select.disabled = true;
+            select.options[0].textContent = 'Tentukan lokasi Anda dahulu…';
             togglePickMode(false);
         });
 
